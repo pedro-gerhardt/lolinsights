@@ -56,8 +56,6 @@ def identify_player(game_name, tag_line):
     url = f"https://{REGION_ROUTING}.api.riotgames.com/riot/account/v1/accounts/by-riot-id/{game_name}/{tag_line}"
     resp = requests.get(url, headers=get_headers())
 
-    print("patrick cu doce:", resp.json())
-    
     if resp.status_code != 200: return jsonify(resp.json()), resp.status_code
     
     data = resp.json()
@@ -72,14 +70,11 @@ def player_summary(puuid):
     # 1. Pega o ID criptografado (SummonerID) necessário para buscar elo
     sum_url = f"https://{REGION_PLATFORM}.api.riotgames.com/lol/summoner/v4/summoners/by-puuid/{puuid}"
     sum_resp = requests.get(sum_url, headers=get_headers())
-    print("patrick cu doce 2:", sum_resp.json())
     if sum_resp.status_code != 200: return jsonify(sum_resp.json()), sum_resp.status_code
-    # summoner_id = sum_resp.json()['id']
 
     # 2. Busca as ligas (Elo)
     league_url = f"https://{REGION_PLATFORM}.api.riotgames.com/lol/league/v4/entries/by-puuid/{puuid}"
     league_resp = requests.get(league_url, headers=get_headers())
-    print("patrick cu doce 3:", league_resp.json())
     
     # Lógica para achar a fila Solo/Duo
     summary = {
