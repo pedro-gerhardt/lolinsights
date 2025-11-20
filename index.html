@@ -1,0 +1,310 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>LolInsights - Local Dev</title>
+  <style>
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      background-color: #0f172a;
+      color: #f8fafc;
+      margin: 0;
+      padding: 20px;
+    }
+    .container {
+      display: grid;
+      grid-template-areas:
+        "header header header"
+        "sidebar main rightbar"
+        "footer footer footer";
+      grid-template-columns: 250px 1fr 250px;
+      grid-template-rows: auto 1fr auto;
+      gap: 20px;
+      min-height: 100vh;
+    }
+    header {
+      grid-area: header;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      background: #1e293b;
+      padding: 15px;
+      border-radius: 10px;
+      box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+    }
+    /* Ajuste para inputs ficarem bonitos lado a lado */
+    header input {
+      padding: 10px;
+      border-radius: 6px;
+      border: 1px solid #334155;
+      background-color: #0f172a;
+      color: white;
+      font-size: 1rem;
+    }
+    header button {
+      padding: 10px 20px;
+      background-color: #3b82f6;
+      color: white;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      font-weight: bold;
+    }
+    header button:hover { background-color: #2563eb; }
+    header button:disabled { background-color: #475569; cursor: not-allowed; }
+
+    .status-icon {
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      background-color: #64748b;
+      margin-left: auto;
+    }
+    .status-icon.live { background-color: #22c55e; box-shadow: 0 0 10px #22c55e; }
+    .status-icon.offline { background-color: #64748b; }
+
+    aside.left, aside.right, main, footer {
+      background: #1e293b;
+      padding: 20px;
+      border-radius: 10px;
+      box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+    }
+    
+    aside.left { grid-area: sidebar; }
+    aside.right { grid-area: rightbar; }
+    main { grid-area: main; overflow-y: auto; }
+    footer { grid-area: footer; text-align: center; }
+
+    h3 {
+      margin-top: 0;
+      margin-bottom: 15px;
+      font-size: 1.1rem;
+      color: #38bdf8;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      border-bottom: 1px solid #334155;
+      padding-bottom: 10px;
+    }
+
+    .data-row { margin-bottom: 10px; font-size: 0.95rem; }
+    .data-row strong { color: #94a3b8; }
+    
+    ul { padding: 0; list-style: none; }
+    li { 
+      margin: 8px 0; 
+      display: flex; 
+      justify-content: space-between;
+      border-bottom: 1px solid #334155;
+      padding-bottom: 5px;
+    }
+    
+    .match {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      background-color: #334155;
+      margin-bottom: 10px;
+      padding: 15px;
+      border-radius: 8px;
+      border-left: 5px solid #64748b;
+    }
+    .match.win { border-left-color: #22c55e; background-color: rgba(34, 197, 94, 0.1); }
+    .match.loss { border-left-color: #ef4444; background-color: rgba(239, 68, 68, 0.1); }
+
+    .champ {
+      background: #0f172a;
+      padding: 6px 12px;
+      border-radius: 20px;
+      display: inline-block;
+      margin: 4px;
+      font-size: 0.85rem;
+      border: 1px solid #334155;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <input id="gameName" type="text" placeholder="Game Name (ex: Faker)" style="flex: 2;" />
+      <input id="tagLine" type="text" placeholder="#TAG" style="width: 80px; text-transform: uppercase;" maxlength="5" />
+      
+      <button onclick="searchPlayer()">Search</button>
+      
+      <div id="liveStatus" class="status-icon" title="Checking status..."></div>
+    </header>
+
+    <aside class="left">
+      <h3>Ranked Stats</h3>
+      <div id="summary-container">
+        <p class="data-row">Use search to load data...</p>
+      </div>
+    </aside>
+
+    <main>
+      <h3>Match History (Last 5)</h3>
+      <div id="matches-container">
+        <p style="color: #64748b; text-align: center;">No matches loaded.</p>
+      </div>
+    </main>
+
+    <aside class="right">
+      <h3>Top Mastery</h3>
+      <ul id="mastery-list">
+      </ul>
+    </aside>
+
+    <footer>
+      <h3>Weekly Free Rotation</h3>
+      <div id="rotation-container">
+        Loading rotation...
+      </div>
+    </footer>
+  </div>
+
+  <script>
+    // --- MODO LOCAL ---
+    const API_BASE_URL = "http://localhost:6969/api/v1"; 
+
+    document.addEventListener('DOMContentLoaded', () => {
+        loadRotation();
+        const params = new URLSearchParams(window.location.search);
+        const nick = params.get('nick');
+        const tag = params.get('tag');
+        if(nick) document.getElementById('gameName').value = nick;
+        if(tag) document.getElementById('tagLine').value = tag;
+        if(nick && tag) searchPlayer();
+    });
+
+    async function searchPlayer() {
+        const gameNameInput = document.getElementById('gameName');
+        const tagLineInput = document.getElementById('tagLine');
+        
+        const gameName = gameNameInput.value.trim();
+        // MUDANÇA AQUI: Limpando a hashtag se o usuário digitar
+        let tagLine = tagLineInput.value.trim().replace('#', ''); 
+
+        if (!gameName || !tagLine) {
+            alert("Please enter both Game Name and Tag.");
+            return;
+        }
+
+        setLoading(true);
+
+        try {
+            console.log(`Identifying player: ${gameName}, ${tagLine}`);
+            const idResp = await fetch(`${API_BASE_URL}/players/identify/${gameName}/${tagLine}`);
+            console.log("Identification response status:", idResp.status);
+            if (!idResp.ok) throw new Error("Player not found (Check Name and Tag)");
+            
+            const identity = await idResp.json();
+            const puuid = identity.puuid;
+            console.log("PUUID:", puuid);
+
+            // Chamadas em paralelo
+            await Promise.all([
+                loadSummary(puuid),
+                loadMastery(puuid),
+                loadMatches(puuid),
+                checkLiveGame(puuid)
+            ]);
+
+        } catch (error) {
+            console.error(error);
+            alert("Error: " + error.message);
+        } finally {
+            setLoading(false);
+        }
+    }
+
+    // --- Resto das funções iguais ao anterior ---
+
+    async function loadSummary(puuid) {
+        const resp = await fetch(`${API_BASE_URL}/players/${puuid}/summary`);
+        const data = await resp.json();
+        const html = `
+            <p class="data-row"><strong>Tier:</strong> ${data.tier} ${data.rank}</p>
+            <p class="data-row"><strong>LP:</strong> ${data.leaguePoints}</p>
+            <p class="data-row"><strong>Wins:</strong> ${data.wins}</p>
+            <p class="data-row"><strong>Losses:</strong> ${data.losses}</p>
+            <p class="data-row" style="color: ${parseInt(data.winrate) >= 50 ? '#22c55e' : '#ef4444'}">
+                <strong>Winrate:</strong> ${data.winrate}
+            </p>
+        `;
+        document.getElementById('summary-container').innerHTML = html;
+    }
+
+    async function loadMastery(puuid) {
+        const resp = await fetch(`${API_BASE_URL}/players/${puuid}/mastery`);
+        const data = await resp.json();
+        const list = document.getElementById('mastery-list');
+        list.innerHTML = '';
+        data.forEach(champ => {
+            const li = document.createElement('li');
+            li.innerHTML = `<span>${champ.championName}</span><span style="color: #94a3b8; font-size: 0.9em">${champ.points.toLocaleString()} pts</span>`;
+            list.appendChild(li);
+        });
+    }
+
+    async function loadMatches(puuid) {
+        const container = document.getElementById('matches-container');
+        container.innerHTML = '<p style="text-align:center">Loading matches...</p>';
+        const resp = await fetch(`${API_BASE_URL}/players/${puuid}/matches?count=5`);
+        const matches = await resp.json();
+        container.innerHTML = ''; 
+        matches.forEach(match => {
+            const isWin = match.result === "Victory";
+            const div = document.createElement('div');
+            div.className = `match ${isWin ? 'win' : 'loss'}`;
+            div.innerHTML = `
+                <div style="font-weight: bold; color: ${isWin ? '#22c55e' : '#ef4444'}">${match.result}</div>
+                <div><span style="display:block; font-size:0.8em; color:#94a3b8">Champion</span>${match.champion}</div>
+                <div><span style="display:block; font-size:0.8em; color:#94a3b8">KDA</span>${match.kda}</div>
+            `;
+            container.appendChild(div);
+        });
+    }
+
+    async function checkLiveGame(puuid) {
+        const statusIcon = document.getElementById('liveStatus');
+        const resp = await fetch(`${API_BASE_URL}/players/${puuid}/live`);
+        const data = await resp.json();
+        if (data.isPlaying) {
+            statusIcon.className = 'status-icon live';
+            statusIcon.title = `Playing as ${data.championName}`;
+        } else {
+            statusIcon.className = 'status-icon offline';
+            statusIcon.title = 'Not in match';
+        }
+    }
+
+    async function loadRotation() {
+        const container = document.getElementById('rotation-container');
+        try {
+            const resp = await fetch(`${API_BASE_URL}/champions/rotation`);
+            const data = await resp.json();
+            container.innerHTML = '';
+            data.freeChampions.forEach(c => {
+                const span = document.createElement('span');
+                span.className = 'champ';
+                span.innerText = c.name;
+                container.appendChild(span);
+            });
+        } catch (e) {
+            container.innerText = 'Failed to load rotation.';
+        }
+    }
+
+    function setLoading(isLoading) {
+        const btn = document.querySelector('button');
+        if (isLoading) {
+            btn.disabled = true;
+            btn.innerText = '...';
+        } else {
+            btn.disabled = false;
+            btn.innerText = 'Search';
+        }
+    }
+  </script>
+</body>
+</html>
