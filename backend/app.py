@@ -1,10 +1,8 @@
 import os
 import requests
-from flask import Flask, jsonify, request
+from flask import Flask, jsonify, request, render_template
 from flask_cors import CORS
 from dotenv import load_dotenv
-
-# --- NOVO: Importar o blueprint do Swagger ---
 from flask_swagger_ui import get_swaggerui_blueprint
 
 load_dotenv()
@@ -17,23 +15,28 @@ RIOT_API_KEY = os.getenv("RIOT_API_KEY")
 REGION_PLATFORM = "br1"
 REGION_ROUTING = "americas"
 
-# --- NOVO: Configuração do Swagger UI ---
-SWAGGER_URL = '/swagger'  # A URL onde a doc vai ficar (ex: localhost:6969/swagger)
-API_URL = '/static/swagger.yaml'  # Onde o arquivo YAML está (na pasta static)
+# --- ROTA DINÂMICA DO SWAGGER SPEC ---
+# O Swagger UI vai ler essa rota em vez do arquivo estático
+@app.route('/swagger-spec')
+def swagger_spec_dynamic():
+    # 1. Descobre o IP atual
+    current_ip = get_public_ip()
+    
+    # 2. Renderiza o arquivo YAML trocando {{ server_ip }} pelo valor real
+    return render_template('swagger.yaml', server_ip=current_ip)
+
+# --- CONFIGURAÇÃO DO SWAGGER UI ---
+SWAGGER_URL = '/swagger'
+# IMPORTANTE: A API_URL agora aponta para a rota python, não para o arquivo estático
+API_URL = '/swagger-spec' 
 
 swaggerui_blueprint = get_swaggerui_blueprint(
     SWAGGER_URL,
     API_URL,
-    config={
-        'app_name': "LolInsights API"
-    }
+    config={'app_name': "LolInsights API"}
 )
-
-# Registra a rota do Swagger no Flask
 app.register_blueprint(swaggerui_blueprint, url_prefix=SWAGGER_URL)
-# ----------------------------------------
 
-# ... (MANTENHA AQUI TODO O CÓDIGO DO CACHE DE CAMPEÕES E LOAD_CHAMPION_DATA) ...
 CHAMPION_MAP = {}
 def load_champion_data():
     # ... (código igual ao anterior) ...
@@ -154,6 +157,45 @@ def champion_rotation():
     resolved_champs = [{"id": cid, "name": get_champion_name(cid)} for cid in data['freeChampionIds']]
     return jsonify({"freeChampions": resolved_champs})
 
+def get_public_ip():
+    """
+    Tenta obter o IP público da EC2 usando IMDSv2.
+    Retorna 'localhost' se falhar (ex: rodando localmente).
+    """
+    try:
+        # 1. Obter o Token de Sessão (Obrigatório no IMDSv2)
+        token_url = "http://169.254.169.254/latest/api/token"
+        headers = {"X-aws-ec2-metadata-token-ttl-seconds": "21600"}
+        token = requests.put(token_url, headers=headers, timeout=2).text
+
+        # 2. Usar o token para pegar o IP Público
+        meta_url = "http://169.254.169.254/latest/meta-data/public-ipv4"
+        header_auth = {"X-aws-ec2-metadata-token": token}
+        public_ip = requests.get(meta_url, headers=header_auth, timeout=2).text
+        
+        return public_ip
+    except Exception:
+        # Se der erro (timeout), assume que estamos rodando local
+        return "localhost"
+
 if __name__ == '__main__':
-    # Host 0.0.0.0 permite acesso externo (importante se for jogar na AWS depois)
-    app.run(host='0.0.0.0', port=6969)
+    # Busca o IP antes de iniciar
+    current_ip = get_public_ip()
+    port = 6969
+    
+    print("-" * 40)
+    print(f"🚀 SERVIDOR INICIADO!")
+    print(f"🏠 Local:   http://localhost:{port}")
+    if current_ip != "localhost":
+        print(f"☁️  AWS EC2: http://{current_ip}:{port}")
+    print("-" * 40)
+    
+    # Adicionei um endpoint para checar o IP via API
+    @app.route('/api/v1/config', methods=['GET'])
+    def get_server_config():
+        return jsonify({
+            "server_ip": current_ip,
+            "environment": "aws" if current_ip != "localhost" else "local"
+        })
+
+    app.run(host='0.0.0.0', port=port)

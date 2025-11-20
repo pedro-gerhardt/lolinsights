@@ -4,7 +4,7 @@ info:
   description: API for the League of Legends Match Monitoring Platform
   version: 1.0.0
 servers:
-  - url: http://3.211.89.42:6969
+  - url: http://{{ server_ip }}:6969
     description: Local Development Server
 
 paths:
