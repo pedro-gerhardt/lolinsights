@@ -1,3 +1,5 @@
 flask
 flask-cors
+flask-swagger-ui
+python-dotenv
 requests

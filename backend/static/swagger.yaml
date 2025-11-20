@@ -1,0 +1,224 @@
+openapi: 3.0.3
+info:
+  title: LolInsights API
+  description: API for the League of Legends Match Monitoring Platform
+  version: 1.0.0
+servers:
+  - url: http://localhost:6969
+    description: Local Development Server
+
+paths:
+  /api/v1/players/identify/{gameName}/{tagLine}:
+    get:
+      summary: Identify Player
+      description: Resolves a Riot ID (Name#Tag) to a PUUID.
+      parameters:
+        - name: gameName
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: tagLine
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlayerIdentity'
+
+  /api/v1/players/{puuid}/summary:
+    get:
+      summary: Player Summary
+      description: Retrieves the player's current ranked stats.
+      parameters:
+        - name: puuid
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlayerSummary'
+
+  /api/v1/players/{puuid}/mastery:
+    get:
+      summary: Mastery Data
+      description: Returns top 5 champions by mastery with resolved names.
+      parameters:
+        - name: puuid
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/MasteryEntry'
+
+  /api/v1/players/{puuid}/matches:
+    get:
+      summary: Match History
+      description: Fetches recent matches with high-level details.
+      parameters:
+        - name: puuid
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: count
+          in: query
+          schema:
+            type: integer
+            default: 5
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/MatchSummary'
+
+  /api/v1/matches/{matchId}:
+    get:
+      summary: Match Details
+      description: Returns deep analysis/details for a specific match.
+      parameters:
+        - name: matchId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                type: object
+
+  /api/v1/players/{puuid}/live:
+    get:
+      summary: Live Game Status
+      description: Checks if the player is currently in an active match.
+      parameters:
+        - name: puuid
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LiveGameStatus'
+
+  /api/v1/champions/rotation:
+    get:
+      summary: Champion Rotation
+      description: Returns the current free champion rotation with names.
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChampionRotation'
+
+components:
+  schemas:
+    PlayerIdentity:
+      type: object
+      properties:
+        puuid:
+          type: string
+        gameName:
+          type: string
+        tagLine:
+          type: string
+
+    PlayerSummary:
+      type: object
+      properties:
+        tier:
+          type: string
+        rank:
+          type: string
+        leaguePoints:
+          type: integer
+        wins:
+          type: integer
+        losses:
+          type: integer
+        winrate:
+          type: string
+
+    MasteryEntry:
+      type: object
+      properties:
+        championId:
+          type: integer
+        championName:
+          type: string
+        masteryLevel:
+          type: integer
+        points:
+          type: integer
+
+    MatchSummary:
+      type: object
+      properties:
+        matchId:
+          type: string
+        champion:
+          type: string
+        kda:
+          type: string
+        result:
+          type: string
+        timestamp:
+          type: integer
+
+    LiveGameStatus:
+      type: object
+      properties:
+        isPlaying:
+          type: boolean
+        gameId:
+          type: integer
+        championId:
+          type: integer
+        championName:
+          type: string
+        startTime:
+          type: integer
+
+    ChampionRotation:
+      type: object
+      properties:
+        freeChampions:
+          type: array
+          items:
+            type: object
+            properties:
+              id:
+                type: integer
+              name:
+                type: string
