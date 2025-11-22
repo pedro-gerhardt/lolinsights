@@ -3,3 +3,4 @@ flask-cors
 flask-swagger-ui
 python-dotenv
 requests
+boto3

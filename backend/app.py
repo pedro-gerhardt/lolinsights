@@ -1,5 +1,8 @@
 import os
+import json
+import time
 import requests
+import boto3
 from flask import Flask, jsonify, request, render_template
 from flask_cors import CORS
 from dotenv import load_dotenv
@@ -14,6 +17,19 @@ CORS(app)
 RIOT_API_KEY = os.getenv("RIOT_API_KEY")
 REGION_PLATFORM = "br1"
 REGION_ROUTING = "americas"
+S3_BUCKET = os.getenv("S3_BUCKET")  # bucket that receives lambda cache (read-only)
+S3_KEY_ROTATION = os.getenv("S3_KEY_ROTATION", "cache/champion_rotation.json")  # key to read rotation JSON
+ROTATION_MAX_AGE_SECONDS = 7 * 24 * 3600  # 1 week
+
+_s3_client = None
+def get_s3():
+    global _s3_client
+    if _s3_client is None:
+        try:
+            _s3_client = boto3.client("s3")
+        except Exception:
+            _s3_client = None
+    return _s3_client
 
 # --- ROTA DINÂMICA DO SWAGGER SPEC ---
 # O Swagger UI vai ler essa rota em vez do arquivo estático
@@ -149,13 +165,32 @@ def live_game(puuid):
 
 @app.route('/api/v1/champions/rotation', methods=['GET'])
 def champion_rotation():
-    # ... (Lógica igual) ...
+    # Try cached file in S3 first
+    s3 = get_s3()
+    cache_miss = True
+    if s3 and S3_BUCKET:
+        try:
+            obj = s3.get_object(Bucket=S3_BUCKET, Key=S3_KEY_ROTATION)
+            raw = obj['Body'].read().decode('utf-8')
+            cached = json.loads(raw)
+            ts = cached.get('timestamp', 0)
+            age = time.time() - ts
+            if age <= ROTATION_MAX_AGE_SECONDS and 'freeChampions' in cached:
+                return jsonify({"source": "cache", "freeChampions": cached['freeChampions']})
+            # Cache exists but stale; treat as hit (no rewrite) and refetch Riot
+            cache_miss = False
+        except Exception:
+            pass
+
+    # Fetch from Riot API as fallback or refresh
     url = f"https://{REGION_PLATFORM}.api.riotgames.com/lol/platform/v3/champion-rotations"
     resp = requests.get(url, headers=get_headers())
-    if resp.status_code != 200: return jsonify(resp.json()), resp.status_code
+    if resp.status_code != 200:
+        return jsonify(resp.json()), resp.status_code
     data = resp.json()
-    resolved_champs = [{"id": cid, "name": get_champion_name(cid)} for cid in data['freeChampionIds']]
-    return jsonify({"freeChampions": resolved_champs})
+    resolved_champs = [{"id": cid, "name": get_champion_name(cid)} for cid in data.get('freeChampionIds', [])]
+
+    return jsonify({"source": "riot", "freeChampions": resolved_champs})
 
 def get_public_ip():
     """
