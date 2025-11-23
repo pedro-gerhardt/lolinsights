@@ -93,13 +93,7 @@ def identify_player(game_name, tag_line):
 
 @app.route('/api/v1/players/<puuid>/summary', methods=['GET'])
 def player_summary(puuid):
-    # ... (Lógica igual) ...
-    sum_url = f"https://{REGION_PLATFORM}.api.riotgames.com/lol/summoner/v4/summoners/by-puuid/{puuid}"
-    sum_resp = requests.get(sum_url, headers=get_headers())
-    if sum_resp.status_code != 200: return jsonify(sum_resp.json()), sum_resp.status_code
-    summoner_id = sum_resp.json()['id']
-
-    league_url = f"https://{REGION_PLATFORM}.api.riotgames.com/lol/league/v4/entries/by-summoner/{summoner_id}"
+    league_url = f"https://{REGION_PLATFORM}.api.riotgames.com/lol/league/v4/entries/by-puuid/{puuid}"
     league_resp = requests.get(league_url, headers=get_headers())
     
     summary = {"tier": "UNRANKED", "rank": "", "leaguePoints": 0, "wins": 0, "losses": 0, "winrate": "0%"}
@@ -154,7 +148,7 @@ def match_details(match_id):
 @app.route('/api/v1/players/<puuid>/live', methods=['GET'])
 def live_game(puuid):
     # ... (Lógica igual) ...
-    url = f"https://{REGION_PLATFORM}.api.riotgames.com/lol/spectator/v4/active-games/by-summoner/{puuid}"
+    url = f"https://{REGION_PLATFORM}.api.riotgames.com/lol/spectator/v5/active-games/by-summoner/{puuid}"
     resp = requests.get(url, headers=get_headers())
     if resp.status_code == 404: return jsonify({"isPlaying": False, "gameId": None, "championId": None, "championName": None, "startTime": None})
     if resp.status_code != 200: return jsonify(resp.json()), resp.status_code
