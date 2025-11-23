@@ -13,8 +13,34 @@ load_dotenv()
 app = Flask(__name__)
 CORS(app)
 
+# --- INICIALIZAÇÃO DE CLIENTES AWS ---
+_secrets_client = None
+def get_secrets_client():
+    global _secrets_client
+    if _secrets_client is None:
+        try:
+            _secrets_client = boto3.client('secretsmanager')
+        except Exception:
+            _secrets_client = None
+    return _secrets_client
+
+# --- FUNÇÕES DE SECRETS MANAGER ---
+def get_riot_api_key():
+    """Recupera a chave da API Riot do AWS Secrets Manager"""
+    try:
+        secrets_client = get_secrets_client()
+        if secrets_client:
+            secret_response = secrets_client.get_secret_value(SecretId='production/riot/api-key')
+            if 'SecretString' in secret_response:
+                secret = json.loads(secret_response['SecretString'])
+                return secret.get('api_key') or secret.get('RIOT_API_KEY')
+        return None
+    except Exception as e:
+        print(f"Erro ao recuperar secret do Secrets Manager: {e}")
+        return os.getenv("RIOT_API_KEY")  # Fallback para variável de ambiente
+
 # --- CONFIGURAÇÕES ---
-RIOT_API_KEY = os.getenv("RIOT_API_KEY")
+RIOT_API_KEY = get_riot_api_key()
 REGION_PLATFORM = "br1"
 REGION_ROUTING = "americas"
 S3_BUCKET = os.getenv("S3_BUCKET")  # bucket that receives lambda cache (read-only)
