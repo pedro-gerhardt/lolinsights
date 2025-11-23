@@ -6,12 +6,10 @@ import requests
 
 """
 Environment variables expected:
+  RIOT_API_KEY - Riot developer API key
   S3_BUCKET    - Target S3 bucket name
   S3_KEY       - Object key (path) to write, e.g. "cache/champion_rotation.json"
   REGION_PLATFORM - e.g. "br1" (defaults br1)
-
-Secrets Manager expected:
-  production/riot/api-key - Secret containing the Riot API key
 
 The JSON structure stored:
   {
@@ -22,26 +20,13 @@ The JSON structure stored:
   }
 """
 
-_session = boto3.session.Session()
-s3 = _session.client("s3")
-secrets_client = _session.client("secretsmanager")
-
 REGION_PLATFORM = os.getenv("REGION_PLATFORM", "br1")
 REGION_ROUTING = os.getenv("REGION_ROUTING", "americas")
 
-CHAMPION_MAP = {}
+_session = boto3.session.Session()
+s3 = _session.client("s3")
 
-def get_riot_api_key():
-    """Recupera a chave da API Riot do AWS Secrets Manager"""
-    try:
-        secret_response = secrets_client.get_secret_value(SecretId='production/riot/api-key')
-        if 'SecretString' in secret_response:
-            secret = json.loads(secret_response['SecretString'])
-            return secret.get('api_key') or secret.get('RIOT_API_KEY')
-        return None
-    except Exception as e:
-        print(f"Erro ao recuperar secret do Secrets Manager: {e}")
-        return os.getenv("RIOT_API_KEY")  # Fallback para variável de ambiente
+CHAMPION_MAP = {}
 
 def load_champion_map():
     global CHAMPION_MAP
@@ -78,12 +63,12 @@ def write_to_s3(bucket: str, key: str, payload: dict):
 
 
 def lambda_handler(event, context):
-    riot_key = get_riot_api_key()
+    riot_key = os.getenv("RIOT_API_KEY")
     bucket = os.getenv("S3_BUCKET")
     key = os.getenv("S3_KEY", "cache/champion_rotation.json")
 
     if not riot_key:
-        return {"statusCode": 500, "body": json.dumps({"error": "Missing RIOT_API_KEY from Secrets Manager"})}
+        return {"statusCode": 500, "body": json.dumps({"error": "Missing RIOT_API_KEY"})}
     if not bucket:
         return {"statusCode": 500, "body": json.dumps({"error": "Missing S3_BUCKET"})}
 
